@@ -29,7 +29,7 @@ final class RedisJournal implements Journal
 	/**
 	 * Writes entry information into the journal.
 	 *
-	 * @param array{tags: string[], priority: int} $dependencies
+	 * @param array{tags: string[], priority: int, expire?: int|null} $dependencies
 	 */
 	public function write(string $key, array $dependencies): void
 	{
@@ -40,8 +40,15 @@ final class RedisJournal implements Journal
 		// add entry to each tag & tag to entry
 		$tags = !isset($dependencies[Cache::Tags]) ? [] : (array) $dependencies[Cache::Tags];
 		foreach (array_unique($tags) as $tag) {
-			$this->client->sadd($this->formatKey($tag, self::SUFFIX_KEYS), [$key]);
-			$this->client->sadd($this->formatKey($key, self::SUFFIX_TAGS), [$tag]);
+			$keyTagKeys = $this->formatKey($tag, self::SUFFIX_KEYS);
+			$keyKeyTags = $this->formatKey($key, self::SUFFIX_TAGS);
+			$this->client->sadd($keyTagKeys, [$key]);
+			$this->client->sadd($keyKeyTags, [$tag]);
+
+			if (isset($dependencies[Cache::Expire])) {
+				$this->client->expire($keyTagKeys, $dependencies[Cache::Expire]);
+				$this->client->expire($keyKeyTags, $dependencies[Cache::Expire]);
+			}
 		}
 
 		if (isset($dependencies[Cache::Priority])) {
